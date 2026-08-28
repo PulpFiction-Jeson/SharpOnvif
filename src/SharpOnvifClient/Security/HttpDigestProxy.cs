@@ -22,7 +22,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
@@ -60,7 +59,7 @@ namespace SharpOnvifClient.Security
                         resultTask = targetMethod.Invoke(Target, args) as Task;
                         await resultTask.ConfigureAwait(false);
                     }
-                    catch(System.ServiceModel.Security.MessageSecurityException ex)
+                    catch (System.ServiceModel.Security.MessageSecurityException ex)
                     {
                         State.SetHeaders(ParseMessageSecurityException(ex.Message));
 
@@ -109,7 +108,7 @@ namespace SharpOnvifClient.Security
                     result = targetMethod.Invoke(Target, args);
                 }
                 return result;
-            }            
+            }
         }
 
         private IEnumerable<string> ParseMessageSecurityException(string message)
@@ -123,17 +122,25 @@ namespace SharpOnvifClient.Security
             The authentication header received from the server was 
             'Digest realm="IP Camera", qop="auth, auth-int", nonce="0000019c15330aa11b968762b51d15c40ba2f12eb2cb1ec02427a1d82440325adbff100bc3f35d74a401e5d533f271cd5e81101a", opaque="00000000", userhash=TRUE, stale="FALSE", Digest realm="IP Camera", qop="auth, auth-int", algorithm=SHA-256, nonce="0000019c15330aa11b968762b51d15c40ba2f12eb2cb1ec02427a1d82440325adbff100bc3f35d74a401e5d533f271cd5e81101a", opaque="00000000", userhash=TRUE, stale="FALSE", Digest realm="IP Camera", qop="auth, auth-int", algorithm=SHA-512-256, nonce="0000019c15330aa11b968762b51d15c40ba2f12eb2cb1ec02427a1d82440325adbff100bc3f35d74a401e5d533f271cd5e81101a", opaque="00000000", userhash=TRUE, stale="FALSE"'.
             */
-            string[] parts = message.Split('\'');
-            string wwwAuthenticateHeadersConcatenated = parts.Single(x => x.StartsWith("Digest", StringComparison.InvariantCultureIgnoreCase));
+            int digestHeaderStart = message.IndexOf("Digest", StringComparison.OrdinalIgnoreCase);
+            if (digestHeaderStart < 0)
+            {
+                throw new InvalidOperationException("The MessageSecurityException does not contain a Digest authentication header.", new FormatException(message));
+            }
+
+            int digestHeaderEnd = message.IndexOf('\'', digestHeaderStart);
+            string wwwAuthenticateHeadersConcatenated = digestHeaderEnd >= 0
+                ? message.Substring(digestHeaderStart, digestHeaderEnd - digestHeaderStart)
+                : message.Substring(digestHeaderStart);
             string[] wwwAuthenticateHeaderParts = wwwAuthenticateHeadersConcatenated.Split(new string[] { "," }, StringSplitOptions.RemoveEmptyEntries);
 
             List<string> wwwAuthenticateHeaders = new List<string>();
             StringBuilder stringBuilder = null;
             for (int i = 0; i < wwwAuthenticateHeaderParts.Length; i++)
             {
-                if(wwwAuthenticateHeaderParts[i].TrimStart().StartsWith("Digest", StringComparison.InvariantCultureIgnoreCase))
+                if (wwwAuthenticateHeaderParts[i].TrimStart().StartsWith("Digest", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    if(stringBuilder != null)
+                    if (stringBuilder != null)
                     {
                         wwwAuthenticateHeaders.Add(stringBuilder.ToString());
                     }
@@ -141,7 +148,7 @@ namespace SharpOnvifClient.Security
                     stringBuilder = new StringBuilder();
                     stringBuilder.Append(wwwAuthenticateHeaderParts[i].TrimStart());
                 }
-                else if(stringBuilder != null)
+                else if (stringBuilder != null)
                 {
                     stringBuilder.Append(",");
                     stringBuilder.Append(wwwAuthenticateHeaderParts[i]);
@@ -151,7 +158,7 @@ namespace SharpOnvifClient.Security
                     Debug.WriteLine($"Error parsing MessageException text");
                 }
             }
-            if(stringBuilder != null)
+            if (stringBuilder != null)
             {
                 wwwAuthenticateHeaders.Add(stringBuilder.ToString());
             }
@@ -168,7 +175,7 @@ namespace SharpOnvifClient.Security
         {
             var proxy = Create<T, HttpDigestProxy<T>>() as HttpDigestProxy<T>;
             proxy.Target = target;
-            proxy.State = state; 
+            proxy.State = state;
             return proxy as T;
         }
 
@@ -179,7 +186,7 @@ namespace SharpOnvifClient.Security
                 if (disposing)
                 {
                     var disposableTarget = Target as IDisposable;
-                    if(disposableTarget != null)
+                    if (disposableTarget != null)
                     {
                         disposableTarget.Dispose();
                     }
